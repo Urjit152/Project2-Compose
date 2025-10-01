@@ -6,10 +6,10 @@ version: '3.8'
 services:
   # Docker-in-Docker daemon service.
   # Runs a Docker daemon inside a container so Jenkins can build images.
-  dind:
+  docker:
     image: docker:dind
     privileged: true               # required for DinD to access kernel features (insecure for prod)
-    container_name: dind           # friendly container name for CLI and logs
+    container_name: docker          # friendly container name for CLI and logs
     environment:
       - DOCKER_TLS_CERTDIR=/certs  # enable TLS cert dir for secure Docker daemon communication
     volumes:
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped         # restart policy to keep Jenkins running
     user: root                      # runs as root to access mounted certs/docker binary; accept security tradeoff
     environment:
-      - DOCKER_HOST=tcp://dind:2376    # Docker daemon URL Jenkins will use. Should match the DinD service name or alias.
+      - DOCKER_HOST=tcp://docker:2376    # Docker daemon URL Jenkins will use. Should match the DinD service name or alias.
       - DOCKER_CERT_PATH=/certs/client   # path inside Jenkins container where client certs are mounted
       - DOCKER_TLS_VERIFY=1              # enforce TLS verification for Docker client
       # NOTE: if DOCKER_HOST uses 'docker' hostname, ensure the dind service is reachable at that name
