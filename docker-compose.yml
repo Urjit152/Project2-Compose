@@ -27,7 +27,7 @@ services:
     restart: unless-stopped         # restart policy to keep Jenkins running
     user: root                      # runs as root to access mounted certs/docker binary; accept security tradeoff
     environment:
-      - DOCKER_HOST=tcp://docker:2376    # Docker daemon URL Jenkins will use. Should match the DinD service name or alias.
+      - DOCKER_HOST=tcp://dind:2376    # Docker daemon URL Jenkins will use. Should match the DinD service name or alias.
       - DOCKER_CERT_PATH=/certs/client   # path inside Jenkins container where client certs are mounted
       - DOCKER_TLS_VERIFY=1              # enforce TLS verification for Docker client
       # NOTE: if DOCKER_HOST uses 'docker' hostname, ensure the dind service is reachable at that name
