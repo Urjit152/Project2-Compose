@@ -1,10 +1,13 @@
-version: '3.8'   # Compose file format version
+version: '3.8'   # Compose file format version (optional in v2+, but kept for clarity)
 
 # This Compose stack runs Jenkins and a Docker-in-Docker (DinD) service.
 # Both share the same named volume (jenkins-data) so Jenkins jobs and DinD
 # see the same /var/jenkins_home workspace.
 
 services:
+  # ------------------------------
+  # Docker-in-Docker (DinD) service
+  # Provides a Docker daemon that Jenkins can talk to securely over TLS.
   docker:
     image: docker:dind
     container_name: docker
@@ -20,16 +23,19 @@ services:
     networks:
       - jenkins
 
+  # ------------------------------
+  # Jenkins service
+  # Runs Jenkins controller, configured to talk to DinD daemon
   jenkins:
     image: jenkins/jenkins:lts-jdk11
     container_name: jenkins
     user: root                       # Run as root to access Docker CLI
     restart: unless-stopped
     environment:
-      - DOCKER_HOST=tcp://docker:2376
-      - DOCKER_CERT_PATH=/certs/client
-      - DOCKER_TLS_VERIFY=1
-      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - DOCKER_HOST=tcp://docker:2376       # Jenkins talks to DinD at this host:port
+      - DOCKER_CERT_PATH=/certs/client      # Path to client certs
+      - DOCKER_TLS_VERIFY=1                 # Enforce TLS
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false # Skip setup wizard
     ports:
       - "8080:8080"                  # Jenkins UI
       - "50000:50000"                # Agent communication
@@ -38,16 +44,22 @@ services:
       - jenkins-data:/var/jenkins_home
       - ./jenkins_init/01-security.groovy:/var/jenkins_home/init.groovy.d/01-security.groovy:ro
       - /usr/bin/docker:/usr/bin/docker   # Map host docker CLI inside Jenkins
+      # Optional: mount host Docker socket if you want Jenkins to use host Docker directly
+      # - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - jenkins
     depends_on:
       - docker
 
+# ------------------------------
+# Named volumes
 volumes:
   jenkins-data:        # Shared Jenkins home
   docker-certs-ca:     # CA certs for TLS
   docker-certs-client: # Client certs for Jenkins
 
+# ------------------------------
+# Network for Jenkins <-> DinD
 networks:
   jenkins:
     driver: bridge
