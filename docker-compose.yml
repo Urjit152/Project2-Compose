@@ -44,6 +44,7 @@ services:
       - jenkins-data:/var/jenkins_home
       - ./jenkins_init/01-security.groovy:/var/jenkins_home/init.groovy.d/01-security.groovy:ro
       - /usr/bin/docker:/usr/bin/docker   # Map host docker CLI inside Jenkins
+      - /var/run/docker.sock:/var/run/docker.sock 
       # Optional: mount host Docker socket if you want Jenkins to use host Docker directly
       # - /var/run/docker.sock:/var/run/docker.sock
     networks:
