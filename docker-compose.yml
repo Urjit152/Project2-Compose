@@ -1,65 +1,53 @@
-# Docker Compose v3.8 for Jenkins + Docker-in-Docker (DinD)
-# Purpose: Run Jenkins in a container and allow it to build/manage Docker images.
+version: '3.8'   # Compose file format version
 
-version: '3.8'
+# This Compose stack runs Jenkins and a Docker-in-Docker (DinD) service.
+# Both share the same named volume (jenkins-data) so Jenkins jobs and DinD
+# see the same /var/jenkins_home workspace.
 
 services:
-  # Docker-in-Docker daemon service.
-  # Runs a Docker daemon inside a container so Jenkins can build images.
   docker:
     image: docker:dind
-    privileged: true               # required for DinD to access kernel features (insecure for prod)
-    container_name: docker          # friendly container name for CLI and logs
+    container_name: docker
+    privileged: true                # Required for DinD to run Docker daemon
     environment:
-      - DOCKER_TLS_CERTDIR=/certs  # enable TLS cert dir for secure Docker daemon communication
+      - DOCKER_TLS_CERTDIR=/certs    # Enable TLS certs for secure Docker API
     ports:
-      - "2376:2376"
+      - "2376:2376"                  # Expose Docker daemon port
     volumes:
-      - docker-certs-ca:/certs/ca      # CA certs used to verify client certificates
-      - docker-certs-client:/certs/client # client certs (to be mounted into Jenkins for TLS auth)
-      - jenkins-data:/var/jenkins_home  # optional: persisting Jenkins home if sharing; keeps data across restarts
- # - /var/run/docker.sock:/var/run/docker.sock  # socket mount for simpler agent access
+      - docker-certs-ca:/certs/ca
+      - docker-certs-client:/certs/client
+      - jenkins-data:/var/jenkins_home   # Shared volume with Jenkins
     networks:
       - jenkins
 
-  # Jenkins CI server.
-  # Configured to use the DinD daemon via DOCKER_HOST / TLS client certs.
   jenkins:
- #   image: jenkins/jenkins:lts-jdk11
-    build:
-      context: .
-      dockerfile: Dockerfile.jenkins
+    image: jenkins/jenkins:lts-jdk11
     container_name: jenkins
-    restart: unless-stopped         # restart policy to keep Jenkins running
-    user: root                      # runs as root to access mounted certs/docker binary; accept security tradeoff
+    user: root                       # Run as root to access Docker CLI
+    restart: unless-stopped
     environment:
-      - DOCKER_HOST=tcp://docker:2376    # Docker daemon URL Jenkins will use. Should match the DinD service name or alias.
-      - DOCKER_CERT_PATH=/certs/client   # path inside Jenkins container where client certs are mounted
-      - DOCKER_TLS_VERIFY=1              # enforce TLS verification for Docker client
+      - DOCKER_HOST=tcp://docker:2376
+      - DOCKER_CERT_PATH=/certs/client
+      - DOCKER_TLS_VERIFY=1
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
-# NOTE: if DOCKER_HOST uses 'docker' hostname, ensure the dind service is reachable at that name
-      # (either name the service 'docker' or add a network alias). Alternatively set DOCKER_HOST=tcp://dind:2376
-    volumes:
-      - docker-certs-client:/certs/client:ro  # mount client TLS certs read-only for Jenkins to authenticate to DinD
-      - jenkins-data:/var/jenkins_home        # persist Jenkins configuration, jobs, plugins and workspace
-      - ./jenkins_init/01-security.groovy:/var/jenkins_home/init.groovy.d/01-security.groovy:ro
-      - ./jenkins_init/02-install-docker-cli.sh:/usr/local/bin/install-docker-cli.sh:ro
-      - /usr/bin/docker:/usr/bin/docker      # optional: map host docker CLI into Jenkins (useful for some plugins)
- #     - /var/run/docker.sock:/var/run/docker.sock  # Mount host Docker socket
- #    command: bash -c "/usr/local/bin/install-docker-cli.sh && /usr/bin/tini -- /usr/local/bin/jenkins.sh"
     ports:
-      - "8080:8080"    # Jenkins web UI
-      - "50000:50000"  # Jenkins agent communication port (JNLP)
+      - "8080:8080"                  # Jenkins UI
+      - "50000:50000"                # Agent communication
+    volumes:
+      - docker-certs-client:/certs/client:ro
+      - jenkins-data:/var/jenkins_home
+      - ./jenkins_init/01-security.groovy:/var/jenkins_home/init.groovy.d/01-security.groovy:ro
+      - /usr/bin/docker:/usr/bin/docker   # Map host docker CLI inside Jenkins
     networks:
       - jenkins
     depends_on:
       - docker
 
 volumes:
-  jenkins-data:        # stores Jenkins home (config, jobs, plugins). Persist between container restarts.
-  docker-certs-ca:     # stores CA certificates for Docker TLS (generated or pre-provisioned)
-  docker-certs-client: # stores client certificates used by Jenkins to authenticate to DinD
+  jenkins-data:        # Shared Jenkins home
+  docker-certs-ca:     # CA certs for TLS
+  docker-certs-client: # Client certs for Jenkins
 
 networks:
-  jenkins:             # user-defined bridge network for service discovery between jenkins and dind
+  jenkins:
     driver: bridge
